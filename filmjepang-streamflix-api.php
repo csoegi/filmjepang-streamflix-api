@@ -257,6 +257,8 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
                 'ids'           => $matched_post_ids,
                 'total_results' => $total_results
             ];
+
+            // Cache volatile list for 30 minutes (hot/trending), static list for 2 hours
             $expiration = in_array($sort, [self::SORT_HOT, self::SORT_TRENDING], true) ? (30 * MINUTE_IN_SECONDS) : (12 * HOUR_IN_SECONDS);
             set_transient($cache_key, $cache_payload, $expiration);
         }
@@ -306,12 +308,12 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
      * @param WP_REST_Request $request The REST request object containing parameters.
      * @return WP_REST_Response|WP_Error The list of terms for the specified taxonomy
      */
-    public function get_taxonomy_terms($request) {
-        $current_route = $request->get_route();
+    public function get_taxonomy_terms($request) {        
         $taxonomy = '';
-
+        $current_route = $request->get_route();
         $cache_key = $this->get_cache_key($request);
         $cached_data = get_transient($cache_key);
+
         if (false !== $cached_data) {
             return rest_ensure_response($cached_data);
         }
@@ -331,6 +333,7 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
             'taxonomy'   => $taxonomy,
             'hide_empty' => false,
         ]);
+
         $terms = $term_query->get_terms();
 
         if (is_wp_error($terms)) {
@@ -347,7 +350,6 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
             ];
         }
 
-        // Save the structured payload, not the empty array
         set_transient( $cache_key, $payload, 12 * HOUR_IN_SECONDS );
 
         return rest_ensure_response($payload);
@@ -363,11 +365,9 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
         global $wpdb;
         
         $route_path = trim($request->get_route(), '/');
-        $segments = explode('/', $route_path);
-        
-        $term_slug        = end($segments);
-        $taxonomy_segment = prev($segments);
-
+        $segments = explode('/', $route_path);             
+        $taxonomy_segment = prev($segments);   
+        $term_slug = end($segments);
         $taxonomy = isset($this->route_mappings[$taxonomy_segment]) ? $this->route_mappings[$taxonomy_segment] : '';
 
         if (empty($taxonomy)) {
@@ -455,6 +455,8 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
                 'ids'           => $matched_post_ids,
                 'total_results' => $total_results
             ];
+
+            // Cache volatile list for 30 minutes (hot/trending), static list for 2 hours
             $expiration = in_array($sort, [self::SORT_HOT, self::SORT_TRENDING], true) ? (30 * MINUTE_IN_SECONDS) : (12 * HOUR_IN_SECONDS);
             set_transient($cache_key, $cache_payload, $expiration);
         }
