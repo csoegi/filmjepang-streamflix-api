@@ -365,9 +365,9 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
         global $wpdb;
         
         $route_path = trim($request->get_route(), '/');
-        $segments = explode('/', $route_path);             
+        $segments = explode('/', $route_path);               
+        $term_slug = end($segments);      
         $taxonomy_segment = prev($segments);   
-        $term_slug = end($segments);
         $taxonomy = isset($this->route_mappings[$taxonomy_segment]) ? $this->route_mappings[$taxonomy_segment] : '';
 
         if (empty($taxonomy)) {
