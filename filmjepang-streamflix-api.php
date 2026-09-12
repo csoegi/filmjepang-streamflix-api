@@ -976,30 +976,15 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
         $content_rating     = get_post_meta($post_id, 'sora_rated', true);
         $streaming_sources  = get_post_meta($post_id, '_fjsi_sources', true);
 
-        // Extract taxonomy terms safely (ensures arrays are always returned, avoiding WP_Error)
-        $genres             = wp_get_post_terms($post_id, 'genre', ['fields' => 'names']);
-        $genres             = is_wp_error($genres) ? [] : $genres;
-        
-        $actors             = wp_get_post_terms($post_id, 'actor', ['fields' => 'names']);
-        $actors             = is_wp_error($actors) ? [] : $actors;
-        
-        $studios            = wp_get_post_terms($post_id, 'studio', ['fields' => 'names']);
-        $studios            = is_wp_error($studios) ? [] : $studios;
-        
-        $directors          = wp_get_post_terms($post_id, 'director', ['fields' => 'names']);
-        $directors          = is_wp_error($directors) ? [] : $directors;
-        
-        $countries          = wp_get_post_terms($post_id, 'country', ['fields' => 'names']);
-        $countries          = is_wp_error($countries) ? [] : $countries;
-        
-        $quality            = wp_get_post_terms($post_id, 'quality', ['fields' => 'names']);
-        $quality            = is_wp_error($quality) ? [] : $quality;
-        
-        $series             = wp_get_post_terms($post_id, 'series', ['fields' => 'names']);
-        $series             = is_wp_error($series) ? [] : $series;
-        
-        $years              = wp_get_post_terms($post_id, 'years', ['fields' => 'names']);
-        $years              = is_wp_error($years) ? [] : $years;
+        // Extract taxonomy terms via Direct SQL to avoid initialization order conflicts
+        $genres             = $this->get_post_terms($post_id, 'genre');
+        $actors             = $this->get_post_terms($post_id, 'actor');
+        $studios            = $this->get_post_terms($post_id, 'studio');
+        $directors          = $this->get_post_terms($post_id, 'director');
+        $countries          = $this->get_post_terms($post_id, 'country');
+        $quality            = $this->get_post_terms($post_id, 'quality');
+        $series             = $this->get_post_terms($post_id, 'series');
+        $years              = $this->get_post_terms($post_id, 'years');
 
         // Extract Rank Math SEO metadata
         $rm_title        = get_post_meta($post_id, 'rank_math_title', true);
@@ -1126,6 +1111,28 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
         ];
 
         return $movie;
+    }
+
+    /**
+     * Get post terms
+     */
+    private function get_post_terms($post_id, $taxonomy) {
+        global $wpdb;
+
+        $query = $wpdb->prepare(
+            "SELECT t.name 
+            FROM {$wpdb->terms} AS t
+            INNER JOIN {$wpdb->term_taxonomy} AS tt ON t.term_id = tt.term_id
+            INNER JOIN {$wpdb->term_relationships} AS tr ON tt.term_taxonomy_id = tr.term_taxonomy_id
+            WHERE tr.object_id = %d AND tt.taxonomy = %s
+            ORDER BY t.name ASC",
+            $post_id,
+            $taxonomy
+        );
+
+        $results = $wpdb->get_col($query);
+
+        return is_array($results) ? $results : [];
     }
 
     /**
