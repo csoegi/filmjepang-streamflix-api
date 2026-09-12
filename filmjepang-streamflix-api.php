@@ -31,7 +31,9 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
     const SORT_RELEASE        = 'release_date'; // latest release date
     const SORT_HOT            = 'hot'; // highest today views
     const SORT_TRENDING       = 'trending'; // highest weekly views
-    const SORT_POPULAR        = 'popular'; // highest total views
+    const SORT_POPULAR        = 'popular'; // highest votes
+    const SORT_TOP_RATED      = 'top_rated'; // highest imdb_score
+    const SORT_MOST_VIEWED    = 'most_viewed'; // highest total views
 
     public static function get_allowed_sort_options() {
         return [
@@ -39,7 +41,9 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
             self::SORT_RELEASE,
             self::SORT_HOT,
             self::SORT_TRENDING,
-            self::SORT_POPULAR
+            self::SORT_POPULAR,
+            self::SORT_TOP_RATED,
+            self::SORT_MOST_VIEWED
         ];
     }
 
@@ -187,7 +191,7 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
      * @param WP_REST_Request $request The REST request object containing parameters.
      * @return WP_REST_Response The transformed movie collection with pagination metadata.
      */
-        public function get_movies($request) {
+    public function get_movies($request) {
         global $wpdb;
 
         // Generate a route-specific cache key signature
@@ -224,6 +228,14 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
                     $order_field = "CAST(IFNULL(pm.meta_value, 0) AS UNSIGNED)";
                     break;
                 case self::SORT_POPULAR:
+                    $meta_join   = "LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'sora_votes'";
+                    $order_field = "CAST(IFNULL(pm.meta_value, 0) AS UNSIGNED)";
+                    break;
+                case self::SORT_TOP_RATED:
+                    $meta_join   = "LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'sora_imdb'";
+                    $order_field = "CAST(IFNULL(pm.meta_value, 0) AS UNSIGNED)";
+                    break;
+                case self::SORT_MOST_VIEWED:
                     $meta_join   = "LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'wpb_post_views_count'";
                     $order_field = "CAST(IFNULL(pm.meta_value, 0) AS UNSIGNED)";
                     break;
@@ -420,6 +432,14 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
                     $order_field = "CAST(IFNULL(pm.meta_value, 0) AS UNSIGNED)";
                     break;
                 case self::SORT_POPULAR:
+                    $meta_join   = "LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'sora_votes'";
+                    $order_field = "CAST(IFNULL(pm.meta_value, 0) AS UNSIGNED)";
+                    break;
+                case self::SORT_TOP_RATED:
+                    $meta_join   = "LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'sora_imdb'";
+                    $order_field = "CAST(IFNULL(pm.meta_value, 0) AS UNSIGNED)";
+                    break;
+                case self::SORT_MOST_VIEWED:
                     $meta_join   = "LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'wpb_post_views_count'";
                     $order_field = "CAST(IFNULL(pm.meta_value, 0) AS UNSIGNED)";
                     break;
@@ -545,6 +565,12 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
                 $order_clause = " ORDER BY relevance DESC, weekly_views DESC";
                 break;
             case self::SORT_POPULAR:
+                $order_clause = " ORDER BY relevance DESC, votes DESC";
+                break;
+            case self::SORT_TOP_RATED:
+                $order_clause = " ORDER BY relevance DESC, imdb_score DESC";
+                break;
+            case self::SORT_MOST_VIEWED:
                 $order_clause = " ORDER BY relevance DESC, total_views DESC";
                 break;
             case self::SORT_NEW:
@@ -1117,13 +1143,15 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
 
         $movie_code = get_post_meta($post_id, '_fjsi_code', true);
         $release_date = get_post_meta($post_id, 'sora_date', true);
+        $imdb_score = intval(get_post_meta($post_id, 'sora_imdb', true));
+        $votes = intval(get_post_meta($post_id, 'sora_votes', true));
         $today_views = intval(get_post_meta($post_id, 'ts_today_view_count', true));
         $weekly_views = intval(get_post_meta($post_id, 'ts_weekly_view_count', true));
         $monthly_views = intval(get_post_meta($post_id, 'ts_monthly_view_count', true));
         $total_views = intval(get_post_meta($post_id, 'wpb_post_views_count', true));
 
         // Collect all related taxonomy term names to feed the fulltext engine
-        $taxonomies = ['kode-prefix', 'actor', 'category', 'genre', 'studio', 'years', 'quality', 'country', 'series'];
+        $taxonomies = ['kode-prefix', 'actor', 'category', 'genre', 'director', 'studio', 'years', 'quality', 'country', 'series'];
         $meta_words = [];
 
         foreach ($taxonomies as $taxonomy) {
@@ -1144,6 +1172,8 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
                 'movie_code'    => !empty($movie_code) ? $movie_code : '',
                 'created_date'  => $post->post_date,
                 'release_date'  => $release_date,
+                'imdb_score'    => $imdb_score,
+                'votes'         => $votes,
                 'today_views'   => $today_views,
                 'weekly_views'  => $weekly_views,
                 'monthly_views' => $monthly_views,
@@ -1151,7 +1181,7 @@ class StreamFlix_REST_Controller extends WP_REST_Controller {
                 'meta_data'     => $meta_data_string
             ],
             // 10 properties = 10 explicitly defined formatting tokens
-            ['%d', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%d', '%s']
+            ['%d', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%s']
         );
     }
 
@@ -1229,18 +1259,23 @@ function streamflix_api_activate() {
     $sql = "CREATE TABLE $table_name (
         post_id bigint(20) unsigned NOT NULL,
         movie_title varchar(255) NOT NULL,
-        movie_code varchar(100) NOT NULL,
+        movie_code varchar(100) NOT NULL, 
         created_date datetime NOT NULL,
         release_date datetime NOT NULL,
+        imdb_score bigint(20) NOT NULL DEFAULT 0, 
+        votes bigint(20) NOT NULL DEFAULT 0, 
         today_views bigint(20) NOT NULL DEFAULT 0,
         weekly_views bigint(20) NOT NULL DEFAULT 0,
-        monthly_views bigint(20) NOT NULL DEFAULT 0,
-        total_views bigint(20) NOT NULL DEFAULT 0,        
+        monthly_views bigint(20) NOT NULL DEFAULT 0,           
+        total_views bigint(20) NOT NULL DEFAULT 0,
         meta_data text NOT NULL,
-        PRIMARY KEY  (post_id),
-        KEY idx_date (created_date),
-        KEY idx_release_date (release_date),
+
+        PRIMARY KEY  (post_id),        
         KEY idx_code (movie_code),
+        KEY idx_created (created_date),
+        KEY idx_release (release_date),
+        
+        -- Full-Text index including the new filter columns for universal search box
         FULLTEXT KEY ft_search_idx (movie_title, movie_code, meta_data)
     ) $charset_collate ENGINE=InnoDB;";
 
